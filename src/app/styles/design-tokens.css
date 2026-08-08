@@ -1,0 +1,123 @@
+/* =====================================================================
+   TravelHub Gulf — design tokens
+
+   Direction: the Gulf's own materials rather than generic travel blue.
+   Limestone and salt flats for surfaces, majlis teal for action, brass for
+   anything paid or premium, pomegranate reserved exclusively for urgency.
+   One accent does one job; that discipline is what stops a marketplace
+   homepage from turning into a fairground.
+   ===================================================================== */
+
+:root {
+    /* Surfaces */
+    --salt:        #EFF2F1;   /* page background, cool mineral — not cream */
+    --limestone:   #E3E7E4;   /* section bands, table stripes */
+    --paper:       #FFFFFF;   /* cards */
+    --ink:         #0B1F1C;   /* body text, deep oasis green-black */
+    --ink-soft:    #40514D;
+    --ink-faint:   #7C8B87;
+
+    /* Action */
+    --teal:        #0E6E64;   /* primary: book, search, submit */
+    --teal-deep:   #08453F;
+    --teal-wash:   #DCEAE7;
+
+    /* Commerce signals */
+    --brass:       #B98A2E;   /* featured, verified, premium tiers */
+    --brass-wash:  #F6EEDC;
+    --pomegranate: #C2334E;   /* urgency only: flash deals, last places */
+
+    /* Structure */
+    --hairline:    color-mix(in oklab, var(--ink) 12%, transparent);
+    --shadow-card: 0 1px 2px rgb(11 31 28 / 0.04), 0 8px 24px -12px rgb(11 31 28 / 0.18);
+    --shadow-lift: 0 2px 6px rgb(11 31 28 / 0.06), 0 24px 48px -20px rgb(11 31 28 / 0.28);
+
+    /* Glass — used once per view, on the sticky booking panel */
+    --glass-bg:     color-mix(in oklab, var(--paper) 72%, transparent);
+    --glass-border: color-mix(in oklab, var(--paper) 90%, transparent);
+    --glass-blur:   saturate(180%) blur(20px);
+
+    /* Type */
+    --font-display: 'Fraunces', 'Noto Serif', serif;
+    --font-body:    'Be Vietnam Pro', system-ui, sans-serif;
+    --font-arabic:  'IBM Plex Sans Arabic', 'Noto Kufi Arabic', sans-serif;
+    --font-devanagari: 'Noto Sans Devanagari', sans-serif;
+    --font-mono:    'IBM Plex Mono', ui-monospace, monospace;
+
+    /* Scale — 1.25 minor third, tuned for dense listing cards */
+    --text-xs: 0.75rem;  --text-sm: 0.875rem; --text-base: 1rem;
+    --text-lg: 1.125rem; --text-xl: 1.375rem; --text-2xl: 1.75rem;
+    --text-3xl: 2.25rem; --text-4xl: 3rem;    --text-5xl: 4rem;
+
+    --radius-sm: 8px; --radius-md: 14px; --radius-lg: 22px; --radius-pill: 999px;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dark mode, written out properly rather than inverted mechanically. */
+[data-theme='dark'] {
+    --salt:      #08120F;
+    --limestone: #101C19;
+    --paper:     #15221F;
+    --ink:       #E8EFEC;
+    --ink-soft:  #A9BAB5;
+    --ink-faint: #6E827D;
+    --teal:      #3DA79A;
+    --teal-wash: #12312D;
+    --brass:     #D8AC5A;
+    --brass-wash:#2A2113;
+    --hairline:  color-mix(in oklab, var(--ink) 18%, transparent);
+    --glass-bg:  color-mix(in oklab, var(--paper) 62%, transparent);
+}
+
+html[dir='rtl'] body { font-family: var(--font-arabic); }
+html[lang='hi'] body { font-family: var(--font-devanagari); }
+
+body {
+    background: var(--salt);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-feature-settings: 'ss01', 'cv05';
+    -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Signature: the dune horizon. A layered ridge that separates sections and
+   rises 4px on card hover. It is the only decorative motif on the site —
+   everything else stays quiet so this reads as intent, not ornament.
+   --------------------------------------------------------------------- */
+.dune-divider {
+--dune-fill: var(--limestone);
+height: 64px;
+background:
+    radial-gradient(120% 100% at 20% 100%, var(--dune-fill) 50%, transparent 51%),
+    radial-gradient(140% 100% at 75% 100%, color-mix(in oklab, var(--dune-fill) 70%, var(--salt)) 50%, transparent 51%);
+background-repeat: no-repeat;
+}
+
+.dune-lift {
+transition: transform 420ms var(--ease-out), box-shadow 420ms var(--ease-out);
+}
+.dune-lift:hover { transform: translateY(-4px); box-shadow: var(--shadow-lift); }
+
+.glass-panel {
+background: var(--glass-bg);
+-webkit-backdrop-filter: var(--glass-blur);
+backdrop-filter: var(--glass-blur);
+border: 1px solid var(--glass-border);
+border-radius: var(--radius-lg);
+box-shadow: var(--shadow-card);
+}

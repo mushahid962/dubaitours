@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# production
+dist/
+
+# environment — never commit these
+.env
+.env.local
+.env*.local
+.env.production
+
+# supabase
+supabase/.branches
+supabase/.temp
+.branches
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+.vercel
+coverage/
+playwright-report/
+test-results/

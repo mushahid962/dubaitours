@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Photo coming soon">
+  <rect width="400" height="300" fill="#E3E7E4"/>
+  <path d="M0 220 Q100 170 200 205 T400 190 V300 H0Z" fill="#D3DAD6"/>
+  <path d="M0 250 Q120 210 240 240 T400 230 V300 H0Z" fill="#C4CDC8"/>
+  <circle cx="310" cy="80" r="26" fill="#B98A2E" opacity="0.35"/>
+  <text x="200" y="150" text-anchor="middle" font-family="system-ui,sans-serif" font-size="15" fill="#7C8B87">Photo coming soon</text>
+</svg>
