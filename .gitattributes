@@ -1,0 +1,22 @@
+# Normalise line endings.
+#
+# Without this, Git warns on every file ("LF will be replaced by CRLF") and
+# a Windows machine and a Linux CI runner can disagree about whether a file
+# changed. Text is stored with LF in the repository and checked out natively.
+* text=auto eol=lf
+
+# Windows-only scripts need CRLF or PowerShell may misread them.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

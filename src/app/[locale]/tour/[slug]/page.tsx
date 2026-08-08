@@ -42,14 +42,28 @@ export async function generateStaticParams() {
   // simply doesn't try to enumerate them.
   if (!isDatabaseConfigured()) return [];
 
-  const supabase = getSupabasePublicClient();
-  const { data } = await supabase
-    .from('tour_search_index')
-    .select('slug, locale')
-    .order('popularity_score', { ascending: false })
-    .limit(2000);
+  // This runs during `next build`. A throw here fails the entire deployment,
+  // so a database that is reachable but not yet migrated — the normal state
+  // between connecting Supabase and running the SQL — must degrade to "pre-
+  // render nothing" rather than taking the build down. `dynamicParams` is
+  // true, so pages still render on first request afterwards.
+  try {
+    const supabase = getSupabasePublicClient();
+    const { data, error } = await supabase
+      .from('tour_search_index')
+      .select('slug, locale')
+      .order('popularity_score', { ascending: false })
+      .limit(2000);
 
-  return (data ?? []).map((row) => ({ locale: row.locale as string, slug: row.slug }));
+    if (error) {
+      console.warn('[build] could not list tours to prerender:', error.message);
+      return [];
+    }
+    return (data ?? []).map((row) => ({ locale: row.locale as string, slug: row.slug }));
+  } catch (cause) {
+    console.warn('[build] tour prerender list unavailable, continuing:', cause);
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {

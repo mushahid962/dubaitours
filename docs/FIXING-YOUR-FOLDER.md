@@ -189,3 +189,60 @@ list in Part 3 of `GETTING-STARTED.md`.
 overwrite. Individual files are for reading in the browser, not for
 downloading — a file downloaded on its own lands at the root, detached from
 the folder it belongs in.
+
+
+---
+
+## Vercel build or database troubleshooting
+
+### "LF will be replaced by CRLF" warnings on `git add`
+
+Harmless. Git is normalising line endings between Windows and Linux. The
+project now ships a `.gitattributes` that settles the rule, so these stop
+after your next commit. Nothing was broken.
+
+### The site deploys but shows "Demo mode"
+
+The commonest cause by far: **the build ran before you added the environment
+variables.** Vercel bakes them in at build time, so adding them afterwards
+changes nothing until you rebuild.
+
+1. Vercel → **Settings → Environment Variables**
+2. Confirm `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+   `SUPABASE_SERVICE_ROLE_KEY` are all present
+3. Tick **Production, Preview and Development** for each
+4. **Deployments → ⋯ → Redeploy**
+
+### The site deploys but pages are empty
+
+Environment variables are set, but the SQL has not been run. In the Supabase
+**SQL Editor**, run `supabase/migrations/0001` through `0012` in order, then
+`supabase/seed/seed.sql`. Check **Table Editor** afterwards: `countries`
+should have 6 rows.
+
+### The build itself fails
+
+Read the **first** error in the Vercel log, not the last — everything after it
+is usually a consequence. Then check:
+
+| Log says | Cause |
+|---|---|
+| `Module not found` | A file did not upload. Confirm `src/` is in your GitHub repo. |
+| `Couldn't find any 'pages' or 'app' directory` | A stray lockfile in a parent folder — see the top of this guide. |
+| `Type error:` | A real code error. Send me the file and line. |
+| Anything mentioning `supabase` | Usually a wrong URL or key. Copy them again from Project Settings → API. |
+
+The build is deliberately resilient to a database that is unreachable or not
+yet migrated: `generateStaticParams` catches the failure, logs a warning, and
+prerenders nothing rather than failing the deployment. Verified by building
+with a deliberately unreachable Supabase URL.
+
+### "Hobby accounts are limited to daily cron jobs"
+
+Fixed in `vercel.json`, which no longer defines any cron jobs. Scheduled work
+moved into Postgres via `pg_cron` — see "Scheduled jobs" in `DEPLOYMENT.md`.
+Pull the latest files, commit and redeploy.
+
+**Do not simply change the schedule to daily.** The seat-hold reaper releases
+abandoned checkout seats within 15 minutes; running it once a day would make
+seats unsellable for up to 24 hours.

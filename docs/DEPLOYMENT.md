@@ -43,31 +43,51 @@ migrations.
 
 ## Vercel configuration
 
-Region `fra1` or `dxb1` when available — the database lives closest to GCC
-traffic, and cross-region round-trips at checkout are the latency that shows.
+Region `fra1` — closest to GCC traffic of Vercel's European regions. Checkout
+latency is where a cross-region round trip shows.
 
-```json
-{
-  "crons": [
-    { "path": "/api/cron/expire-holds",  "schedule": "* * * * *" },
-    { "path": "/api/cron/popularity",    "schedule": "0 2 * * *" },
-    { "path": "/api/cron/sitemap-warm",  "schedule": "0 3 * * *" },
-    { "path": "/api/cron/payouts",       "schedule": "0 4 * * 1" },
-    { "path": "/api/cron/review-digest", "schedule": "0 9 * * *" }
-  ]
-}
-```
+`vercel.json` deliberately contains **no cron jobs**. Vercel's Hobby plan
+allows one cron run per day, and the seat-hold reaper must run every minute:
+a hold expires after 15 minutes, so a daily sweep would leave seats
+unsellable for up to 24 hours.
 
-Every cron route checks `Authorization: Bearer $CRON_SECRET` before doing
-anything. An unauthenticated cron endpoint is a free denial-of-service.
+## Scheduled jobs (pg_cron)
 
-Prefer `pg_cron` inside Supabase for `expire_stale_holds()` if you'd rather
-the reaper not depend on the web tier being healthy:
+Recurring work runs inside Postgres instead. Migration `0013` registers four
+jobs, but **pg_cron must be enabled once per project first**:
+
+> Supabase Dashboard → Database → Extensions → search "pg_cron" → enable
+
+Then run `supabase/migrations/0013_scheduled_jobs.sql`. If pg_cron is not
+enabled the migration does not fail — it prints a notice and schedules
+nothing, so watch for that message.
+
+| Job | Schedule | Why |
+|---|---|---|
+| `expire-stale-holds` | every minute | Releases seats from abandoned checkouts |
+| `refresh-homepage-stats` | hourly | Homepage counters |
+| `refresh-popularity` | 02:15 daily | Listing rank |
+| `complete-past-bookings` | 03:30 daily | Frees bookings for payout and review requests |
+
+Confirm they are running:
 
 ```sql
-select cron.schedule('expire-holds', '* * * * *', $$select expire_stale_holds()$$);
-select cron.schedule('popularity', '0 2 * * *', $$select refresh_popularity_scores()$$);
+select * from scheduled_job_status;
 ```
+
+`last_status` should read `succeeded`. **If `expire-stale-holds` is not
+running, seats held by abandoned checkouts are never released and your
+inventory slowly disappears.** Check this after your first deploy.
+
+The `/api/cron/*` routes still exist as a manual trigger, and for anyone on a
+Vercel paid plan who prefers Vercel Cron. To use them instead, add to
+`vercel.json`:
+
+```json
+"crons": [{ "path": "/api/cron/expire-holds", "schedule": "* * * * *" }]
+```
+
+They require `Authorization: Bearer $CRON_SECRET`.
 
 ## Webhooks
 
