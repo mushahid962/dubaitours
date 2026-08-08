@@ -32,6 +32,14 @@ cluster and exercised with the test scripts in `supabase/tests/` — including
 oversell attempts, replayed webhooks and two privilege-escalation attacks.
 Results are in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
+## Architecture
+
+The system is built on a three-layer spine — **business → listing → product**
+— which is what lets one codebase serve a booking marketplace, a directory and
+a destination guide at once. Read
+[`docs/PHASE-0-ARCHITECTURE.md`](docs/PHASE-0-ARCHITECTURE.md) first; it
+covers the entity model, URL architecture, roles, SEO and the phase order.
+
 ## Loose files at your root, or trouble pushing to GitHub?
 
 See [`docs/FIXING-YOUR-FOLDER.md`](docs/FIXING-YOUR-FOLDER.md). It lists

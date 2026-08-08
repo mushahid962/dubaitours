@@ -51,6 +51,11 @@ join (values
   ('AE', 55.2708, 25.2048, 'Asia/Dubai',   3600000, true,  100, 'https://res.cloudinary.com/travelhub/image/upload/f_auto,q_auto/cities/dubai.jpg'),
   ('AE', 54.3773, 24.4539, 'Asia/Dubai',   1500000, true,  90,  'https://res.cloudinary.com/travelhub/image/upload/f_auto,q_auto/cities/abu-dhabi.jpg'),
   ('AE', 55.9432, 25.7895, 'Asia/Dubai',    345000, false, 60,  null),
+  ('AE', 55.4033, 25.3463, 'Asia/Dubai',   1400000, true,  72,  null),
+  ('AE', 55.5136, 25.4052, 'Asia/Dubai',    540000, true,  68,  null),
+  ('AE', 55.9769, 25.7889, 'Asia/Dubai',    345000, false, 58,  null),
+  ('AE', 56.3265, 25.1288, 'Asia/Dubai',    230000, false, 55,  null),
+  ('AE', 55.5550, 25.5647, 'Asia/Dubai',     80000, false, 45,  null),
   ('SA', 46.6753, 24.7136, 'Asia/Riyadh',  7600000, true,  85,  null),
   ('SA', 39.1925, 21.4858, 'Asia/Riyadh',  4600000, true,  80,  null),
   ('SA', 37.9200, 26.6100, 'Asia/Riyadh',     5000, true,  78,  null),
@@ -112,6 +117,31 @@ join (values
    'November to March.',
    'Things to Do in Manama 2026 | Bahrain Tours & Tickets',
    'Book Bahrain island tours, F1 experiences and pearl-diving trips.'),
+  (55.4033,'en','Sharjah','sharjah','The cultural capital of the Emirates',
+   'UNESCO-listed heritage districts, the Blue Souq and museums that Dubai does not have — twenty minutes from Dubai Marina.',
+   'November to March.',
+   'Things to Do in Sharjah 2026 | Museums, Souqs & Heritage',
+   'Book Sharjah museum tickets, heritage walks and desert trips. Free cancellation.'),
+  (55.5136,'en','Ajman','ajman','The quiet beach emirate',
+   'The smallest emirate: an uncrowded corniche, a 18th-century fort museum and seafood on the creek.',
+   'October to April.',
+   'Things to Do in Ajman 2026 | Beaches & Day Trips',
+   'Discover Ajman beaches, the fort museum and dhow yards. Easy day trip from Dubai.'),
+  (55.9769,'en','Ras Al Khaimah','ras-al-khaimah','Mountains, not just dunes',
+   'Jebel Jais is the UAE''s highest peak and home to the world''s longest zipline — a different landscape entirely.',
+   'November to March.',
+   'Things to Do in Ras Al Khaimah 2026 | Jebel Jais & Zipline',
+   'Book Jebel Jais zipline, mountain hikes and desert camps in Ras Al Khaimah.'),
+  (56.3265,'en','Fujairah','fujairah','The Gulf of Oman coast',
+   'The only emirate on the east coast: diving at Snoopy Island, the oldest mosque in the UAE, and mountains behind the beach.',
+   'October to April.',
+   'Things to Do in Fujairah 2026 | Diving & Beaches',
+   'Book Fujairah diving trips, snorkelling and mountain tours on the Gulf of Oman.'),
+  (55.5550,'en','Umm Al Quwain','umm-al-quwain','Lagoons and mangroves',
+   'Kayaking through mangroves, a bird-filled lagoon and the UAE''s oldest waterpark, with almost nobody there.',
+   'October to April.',
+   'Things to Do in Umm Al Quwain 2026 | Mangroves & Kayaking',
+   'Kayak the Umm Al Quwain mangroves and visit Dreamland waterpark.'),
   (47.9774,'en','Kuwait City','kuwait-city','Towers, dhows and desert edges',
    'Kuwait Towers, the Grand Mosque and Failaka Island ferries make a compact itinerary.',
    'November to March.',
@@ -120,6 +150,69 @@ join (values
 ) as v(lng, locale, name, slug, tagline, intro, best_time, meta_title, meta_desc)
   on st_x(ci.centroid::geometry) = v.lng
 on conflict do nothing;
+
+
+-- --------------------------------------------------------------- regions
+-- country -> region -> city. The UAE gets its seven emirates; every other
+-- country gets one region until its own subdivisions are added.
+insert into regions (country_id, code, kind, priority)
+select c.id, x.code, 'emirate', x.priority
+from countries c
+join (values
+  ('AE-DU','AE',100), ('AE-AZ','AE',95), ('AE-SH','AE',80),
+  ('AE-AJ','AE',60),  ('AE-RK','AE',70), ('AE-FU','AE',55), ('AE-UQ','AE',40)
+) as x(code, iso2, priority) on x.iso2 = c.iso2
+on conflict (country_id, code) do nothing;
+
+insert into regions (country_id, code, kind, priority)
+select c.id, c.iso2 || '-00', 'region', 50
+from countries c where c.iso2 <> 'AE'
+on conflict (country_id, code) do nothing;
+
+insert into region_translations (region_id, locale, name, slug, tagline)
+select r.id, x.locale::locale_code, x.name, x.slug, x.tagline
+from regions r
+join (values
+  ('AE-DU','en','Dubai','dubai-emirate','The emirate, beyond the city'),
+  ('AE-DU','ar','دبي','امارة-دبي','الإمارة خارج حدود المدينة'),
+  ('AE-AZ','en','Abu Dhabi','abu-dhabi-emirate','Capital emirate, from Yas to the Empty Quarter'),
+  ('AE-SH','en','Sharjah','sharjah-emirate','Heritage, museums and the east coast'),
+  ('AE-AJ','en','Ajman','ajman-emirate','The smallest emirate'),
+  ('AE-RK','en','Ras Al Khaimah','ras-al-khaimah-emirate','Mountains and the Gulf'),
+  ('AE-FU','en','Fujairah','fujairah-emirate','The Gulf of Oman coast'),
+  ('AE-UQ','en','Umm Al Quwain','umm-al-quwain-emirate','Lagoons and mangroves')
+) as x(code, locale, name, slug, tagline) on x.code = r.code
+on conflict do nothing;
+
+insert into region_translations (region_id, locale, name, slug)
+select r.id, ct.locale, ct.name, ct.slug || '-region'
+from regions r
+join countries c on c.id = r.country_id
+join country_translations ct on ct.country_id = c.id
+where r.code = c.iso2 || '-00'
+on conflict do nothing;
+
+-- Match each city to its emirate by slug, then fall back to the country-level
+-- region so no city is left outside the hierarchy.
+update cities ci
+   set region_id = r.id
+  from regions r
+  join region_translations rt on rt.region_id = r.id and rt.locale = 'en'
+ where ci.region_id is null
+   and r.country_id = ci.country_id
+   and rt.slug = (
+     select ct.slug || '-emirate' from city_translations ct
+     where ct.city_id = ci.id and ct.locale = 'en'
+   );
+
+update cities ci set region_id = r.id
+  from regions r
+ where ci.region_id is null and r.country_id = ci.country_id and r.code like '%-00';
+
+update cities ci
+   set region_id = (select r.id from regions r
+                    where r.country_id = ci.country_id order by r.priority desc limit 1)
+ where ci.region_id is null;
 
 -- --------------------------------------------------------- categories
 with roots as (
@@ -307,6 +400,88 @@ on conflict (locale, label) do nothing;
 -- Counters are a materialized view, so they must be refreshed after seeding
 -- or the homepage reports zero tours on a freshly seeded database.
 select refresh_homepage_stats();
+
+-- ---------------------------------------------------- directory listings
+with dubai as (
+  select ci.id from cities ci
+  join city_translations ct on ct.city_id = ci.id
+  where ct.locale = 'en' and ct.slug = 'dubai' limit 1
+),
+inserted as (
+  insert into points_of_interest
+    (city_id, kind, vertical_id, location, address, rating, rating_count,
+     price_level, price_from, currency, amenities, attributes, image_url, website)
+  select d.id, x.kind,
+         (select id from verticals where code = x.vertical),
+         st_point(x.lng, x.lat)::geography, x.address, x.rating, x.rating_count,
+         x.price_level, x.price_from, 'AED'::currency_code, x.amenities, x.attributes::jsonb, x.image, x.website
+  from dubai d
+  cross join (values
+    ('hotel','hotels', 55.1855, 25.1412, 'Jumeirah Beach Road, Umm Suqeim 3', 4.7, 8420, 4, 2400,
+     array['pool','spa','beach access','airport shuttle','free wifi','fine dining'],
+     '{"stars":5,"area":"Jumeirah","check_in":"15:00"}',
+     'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&q=80', 'https://example.com'),
+    ('hotel','hotels', 55.2708, 25.1972, 'Downtown Dubai, Mohammed Bin Rashid Blvd', 4.6, 5310, 4, 1100,
+     array['pool','spa','free wifi','gym','city view'],
+     '{"stars":5,"area":"Downtown","check_in":"15:00"}',
+     'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&q=80', 'https://example.com'),
+    ('hotel','hotels', 55.1300, 25.0800, 'Dubai Marina Walk', 4.3, 2740, 3, 480,
+     array['pool','free wifi','gym','marina view'],
+     '{"stars":4,"area":"Marina","check_in":"14:00"}',
+     'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1200&q=80', null),
+    ('mall','malls', 55.2796, 25.1972, 'Financial Center Road, Downtown Dubai', 4.6, 41200, null, null,
+     array['cinema','food court','aquarium','ice rink','valet parking','prayer room'],
+     '{"stores":1200,"opens":"10:00","closes":"00:00"}',
+     'https://images.unsplash.com/photo-1519567241046-7f570eee3ce6?w=1200&q=80', null),
+    ('mall','malls', 55.1180, 25.0330, 'Sheikh Zayed Road, Al Barsha', 4.5, 28900, null, null,
+     array['ski slope','cinema','food court','valet parking','prayer room'],
+     '{"stores":600,"opens":"10:00","closes":"23:00"}',
+     'https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?w=1200&q=80', null),
+    ('attraction','attractions', 55.2744, 25.1972, '1 Sheikh Mohammed bin Rashid Blvd', 4.7, 63400, 3, 179,
+     array['skip the line','observation deck','wheelchair accessible','audio guide'],
+     '{"height_m":828,"floors":163}',
+     'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1200&q=80', null),
+    ('attraction','attractions', 55.1856, 25.1341, 'Jumeirah Street, Umm Suqeim', 4.4, 18700, 2, 65,
+     array['family friendly','wheelchair accessible','parking'],
+     '{"outdoor":true}',
+     'https://images.unsplash.com/photo-1518684079-3c830dcef090?w=1200&q=80', null)
+  ) as x(kind, vertical, lng, lat, address, rating, rating_count, price_level, price_from,
+         amenities, attributes, image, website)
+  where not exists (
+    select 1 from points_of_interest p where p.city_id = d.id and p.address = x.address
+  )
+  returning id, address
+)
+insert into poi_translations (poi_id, locale, name, slug, summary, description)
+select i.id, 'en', x.name, x.slug, x.summary, x.description
+from inserted i
+join (values
+  ('Jumeirah Beach Road, Umm Suqeim 3','Burj Al Arab Jumeirah','burj-al-arab-jumeirah',
+   'The sail-shaped icon, with a private beach and suites over the Gulf.',
+   'Every room is a duplex suite, and the arrival is by Rolls-Royce or helipad. Even if you are not staying, the afternoon tea in the Skyview Bar is the way most people see the inside.'),
+  ('Downtown Dubai, Mohammed Bin Rashid Blvd','Address Downtown','address-downtown',
+   'Fountain-facing rooms a lift ride from the Burj Khalifa.',
+   'The location is the product: the Dubai Fountain performs directly below, and the Burj Khalifa entrance is through the connected mall.'),
+  ('Dubai Marina Walk','Marina Byblos Hotel','marina-byblos-hotel',
+   'Straightforward four-star on the Marina Walk.',
+   'No frills and no pretence — a rooftop pool, a short walk to the tram, and Marina restaurants downstairs.'),
+  ('Financial Center Road, Downtown Dubai','The Dubai Mall','the-dubai-mall',
+   'Twelve hundred stores, an aquarium and the Burj Khalifa entrance.',
+   'More a district than a mall. Allow a full day, and use the Dubai Mall metro link rather than driving at the weekend.'),
+  ('Sheikh Zayed Road, Al Barsha','Mall of the Emirates','mall-of-the-emirates',
+   'Shopping with an indoor ski slope attached.',
+   'Ski Dubai is the reason most visitors come. Quieter than The Dubai Mall and easier to park at.'),
+  ('1 Sheikh Mohammed bin Rashid Blvd','Burj Khalifa','burj-khalifa',
+   'The world''s tallest building, with observation decks on 124, 125 and 148.',
+   'Book the sunset slot weeks ahead — it sells out first and is the only time you see the city in both daylight and lights. Level 148 costs roughly triple and adds an outdoor terrace.'),
+  ('Jumeirah Street, Umm Suqeim','Kite Beach','kite-beach',
+   'Free public beach with a skyline view and food trucks.',
+   'The running track and the view of the Burj Al Arab make this the beach locals actually use. Showers and changing rooms are free.')
+) as x(address, name, slug, summary, description) on x.address = i.address
+on conflict do nothing;
+
+-- Populate the listing spine from everything seeded above.
+select backfill_listings();
 
 insert into site_settings (key, value, description) values
   ('brand', '{"name":"TravelHub Gulf","supportEmail":"help@travelhubgulf.com","whatsapp":"+971500000000"}', 'Global brand identity'),

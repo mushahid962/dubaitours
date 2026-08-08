@@ -115,6 +115,37 @@ vulnerabilities with dev dependencies included.
 rather than `middleware`), which is the Next 16 convention and removes the
 deprecation warning printed on every build.
 
+## Phase 0 — listing spine and regions
+
+Migrations 0016 (regions) and 0017 (listing spine) applied to a clean
+database, seed run twice, all 17 migrations clean.
+
+`06_listing_spine.sql`:
+
+| Check | Result |
+|---|---|
+| Tours and venues in one `listing_index` | 8 listings across 4 verticals |
+| Listing slug claiming a category slug (same locale) | Refused by trigger |
+| Listing with both a tour and a venue attached | `check_violation` |
+| Renaming a tour | Propagates to its listing |
+| Changing a tour price | Propagates to its listing |
+| Fulfilment per vertical | tours=booking, hotels=enquiry, malls=info_only |
+| Per-listing fulfilment override | One hotel switched to booking |
+| Listings without a region | 0 of 8 |
+| Cities without a region | 0 of 15 |
+
+Two mistakes found and fixed while building this:
+
+1. **The region backfill lived in a migration and produced zero rows** —
+   migrations run before the seed, so there were no countries to join to.
+   Data moved to `seed.sql`; migrations now define schema only.
+2. **`UPDATE ... FROM` cannot join back to the target table's own alias.**
+   Rewritten as a correlated subquery.
+
+The slug guard is deliberately per-locale: `/hi/…/desert-safari` and
+`/en/…/desert-safari` are different URLs and do not collide. Only a clash
+within one language is a real collision, and that is what the trigger blocks.
+
 ## Not yet verified
 
 The TypeScript layer has not been type-checked or run — it depends on
