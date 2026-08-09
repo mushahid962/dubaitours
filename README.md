@@ -32,6 +32,19 @@ cluster and exercised with the test scripts in `supabase/tests/` — including
 oversell attempts, replayed webhooks and two privilege-escalation attacks.
 Results are in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
+## Connecting the database
+
+Three SQL files to paste, four environment variables to set. Full walkthrough
+in [`docs/DATABASE-SETUP.md`](docs/DATABASE-SETUP.md) — do this before
+anything else, because nothing works without it.
+
+## Logging in for the first time
+
+Sign up at `/sign-up`, then run `supabase/scripts/grant-admin.sql` with your
+email to become a super admin. There is no button for this on purpose. Full
+walkthrough, including why setting the role alone is not enough, in
+[`docs/LOGGING-IN.md`](docs/LOGGING-IN.md).
+
 ## Continuing this project in Claude Code
 
 `CLAUDE.md` in the root is loaded automatically by Claude Code at the start of
