@@ -72,6 +72,9 @@ and the last active super admin cannot be demoted.
 |---|---|
 | Views over RLS tables | Run as the view's OWNER by default → cross-tenant leak. Always `with (security_invoker = true)`. |
 | Trigger functions | Run as the CALLER. If they touch the `internal` schema or write aggregates, they need `security definer`. |
+| `FORCE ROW LEVEL SECURITY` | Breaks Supabase's sign-up trigger. The documented pattern relies on a definer function's OWNER bypassing RLS; FORCE removes that, and every registration fails with "Database error creating new user". Use plain `enable`, not `force`, on any table a definer trigger writes to. |
+| Testing RLS as superuser | Proves nothing. Locally `postgres` is a superuser and bypasses RLS even with FORCE; on Supabase it is not. Reproduce with `create role x nosuperuser nobypassrls`, `alter table … owner to x`, `set role x`. |
+| Masking `sqlerrm` in an exception handler | Cost an hour here. Always include the original `sqlerrm` and `sqlstate` in a re-raise. |
 | `text[] \|\| 'literal'` | Parsed as an array literal. Cast: `\|\| 'x'::text`. |
 | `CASE` returning two bare literals | Resolves to `text`, not the enum. Cast each branch. |
 | `UPDATE ... FROM` | Cannot join back to the target's own alias. Use a correlated subquery. |

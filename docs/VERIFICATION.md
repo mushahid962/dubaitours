@@ -146,6 +146,38 @@ The slug guard is deliberately per-locale: `/hi/…/desert-safari` and
 `/en/…/desert-safari` are different URLs and do not collide. Only a clash
 within one language is a real collision, and that is what the trigger blocks.
 
+## Sign-up failure (fixed in 0023)
+
+Every registration failed with "Database error creating new user", including
+the first admin through `/setup`.
+
+**Cause:** `profiles` carried `FORCE ROW LEVEL SECURITY`. Supabase's sign-up
+pattern is a `SECURITY DEFINER` trigger whose owner bypasses RLS to provision
+the profile row — FORCE removes exactly that, so the insert was refused and
+the whole sign-up rolled back.
+
+**Why every test missed it:** locally psql connects as `postgres`, which is a
+SUPERUSER and bypasses RLS even under FORCE. On Supabase `postgres` is
+deliberately neither superuser nor BYPASSRLS. Reproduced only after creating
+`sb_owner` with `nosuperuser nobypassrls`, giving it ownership of the table
+and function, and running as that role:
+
+```
+SIGN-UP FAILED: new row violates row-level security policy for table "profiles" [42501]
+```
+
+After 0023: `SIGN-UP WORKED`, profile created as `customer` / `active`.
+
+Re-verified afterwards, unchanged: RLS isolation (`02`), and all eight
+escalation guards in `07_auth_rbac.sql`.
+
+Two process lessons, both now in CLAUDE.md:
+
+- A superuser test proves nothing about RLS.
+- An exception handler that replaces `sqlerrm` with a guess destroys the
+  evidence. My handler asserted "migration 0023 adds the missing policy" while
+  the real error said something else entirely, and it cost an hour.
+
 ## Not yet verified
 
 The TypeScript layer has not been type-checked or run — it depends on
