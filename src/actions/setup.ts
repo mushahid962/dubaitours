@@ -95,14 +95,46 @@ export async function completeSetupAction(_prev: SetupState, formData: FormData)
   });
 
   if (createError || !created.user) {
-    if (createError && /already/i.test(createError.message)) {
+    console.error('[setup] createUser failed', createError);
+
+    // Surfacing the real error here is deliberate. This page exists only
+    // before any account does, so there is nothing to leak — and "check the
+    // logs" is useless advice to someone who cannot reach the logs. Each
+    // known cause gets the fix, not just the symptom.
+    const raw = createError?.message ?? 'Unknown error';
+
+    if (/already|registered|exists/i.test(raw)) {
       return {
         status: 'error',
-        message: 'An account with that email already exists. Sign in, then use the SQL script in supabase/scripts/ instead.',
+        message: `An account already exists for that email. Use a different address, or delete the user in Supabase → Authentication → Users and try again. (${raw})`,
       };
     }
-    console.error('[setup] createUser failed', createError);
-    return { status: 'error', message: 'Could not create that account. Check the Supabase logs.' };
+    if (/password/i.test(raw)) {
+      return {
+        status: 'error',
+        message: `Supabase rejected the password: ${raw}. Check Authentication → Providers → Email for the minimum length set on your project.`,
+      };
+    }
+    if (/database error|unexpected_failure/i.test(raw)) {
+      return {
+        status: 'error',
+        message: `The database rejected the new user: ${raw}. This is almost always the handle_new_user trigger. Run part-1-schema.sql and part-2-schema.sql again, then check Supabase → Logs → Postgres for the underlying error.`,
+      };
+    }
+    if (/not authorized|invalid|jwt|api key/i.test(raw)) {
+      return {
+        status: 'error',
+        message: `Supabase refused the request: ${raw}. Your SUPABASE_SERVICE_ROLE_KEY is probably wrong or is the anon key. Copy the service_role secret from Project Settings → API, update it in Vercel, and REDEPLOY.`,
+      };
+    }
+    if (/signup|disabled|not allowed/i.test(raw)) {
+      return {
+        status: 'error',
+        message: `Sign-ups are disabled on your Supabase project: ${raw}. Turn them on under Authentication → Providers → Email.`,
+      };
+    }
+
+    return { status: 'error', message: `Supabase said: ${raw}` };
   }
 
   const { error: bootstrapError } = await admin.rpc('bootstrap_super_admin', {

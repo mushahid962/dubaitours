@@ -17,7 +17,19 @@ export const passwordSchema = z.string()
   .min(12, 'Use at least 12 characters — length matters more than symbols.')
   .max(200, 'That is longer than we can store.')
   .refine((value) => !COMMON.has(value.toLowerCase()), 'That password is too common to be safe.')
-  .refine((value) => !/^(.)\1+$/.test(value), 'That is the same character repeated.');
+  .refine((value) => !/^(.)\1+$/.test(value), 'That is the same character repeated.')
+  // One word followed by digits — "honeybee12345", "sunshine2024" — is the
+  // first pattern every cracking dictionary tries, and 12 characters of it is
+  // weaker than 12 characters of anything else. Length alone does not save it.
+  .refine(
+    (value) => !/^[a-zA-Z]+[0-9]{1,6}[!@#$%^&*]?$/.test(value),
+    'A word followed by numbers is the first thing password crackers try. Use three or four unrelated words instead.',
+  )
+  // Ascending or repeated digit runs give almost no entropy however long.
+  .refine(
+    (value) => !/(0123|1234|2345|3456|4567|5678|6789|7890)/.test(value),
+    'Avoid runs like 1234 — they add almost nothing.',
+  );
 
 export const signUpSchema = z.object({
   fullName: z.string().trim().min(2, 'Tell us your name.').max(120),
