@@ -21,6 +21,7 @@ export default function robots(): MetadataRoute.Robots {
       `${SITE_URL}/sitemap.xml`,
       `${SITE_URL}/sitemaps/tours.xml`,
       `${SITE_URL}/sitemaps/destinations.xml`,
+      `${SITE_URL}/sitemaps/locations.xml`,
       `${SITE_URL}/sitemaps/blog.xml`,
       `${SITE_URL}/sitemaps/images.xml`,
       `${SITE_URL}/sitemaps/news.xml`,

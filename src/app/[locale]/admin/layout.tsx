@@ -25,7 +25,7 @@ export default async function AdminLayout({
 
   // Counts drive the sidebar badges. head:true fetches no rows — an admin
   // panel that pulls every lead just to show a number gets slow fast.
-  const [leads, posts, tours, applications, claims, reviews] = await Promise.all([
+  const [leads, posts, tours, applications, claims, reviews, draftLocations] = await Promise.all([
     supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
     supabase.from('blog_posts').select('id', { count: 'exact', head: true }).neq('status', 'archived'),
     supabase.from('tours').select('id', { count: 'exact', head: true }).eq('status', 'in_review'),
@@ -33,11 +33,13 @@ export default async function AdminLayout({
       .in('status', ['submitted', 'under_review']),
     supabase.from('listing_claims').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('reviews').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('locations').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
   ]);
 
   const groups = adminNav(prefix, {
     leads: leads.count ?? 0, posts: posts.count ?? 0, tours: tours.count ?? 0,
     applications: applications.count ?? 0, claims: claims.count ?? 0, reviews: reviews.count ?? 0,
+    locations: draftLocations.count ?? 0,
   });
 
   return (

@@ -483,6 +483,243 @@ on conflict do nothing;
 -- Populate the listing spine from everything seeded above.
 select backfill_listings();
 
+-- ======================================================================
+-- LOCATION HIERARCHY (Phase 2)
+-- country -> region -> city -> district -> neighborhood
+-- Backfilled from the operational tables, then extended with districts and
+-- neighborhoods that have no counterpart there.
+-- ======================================================================
+
+-- 1. Countries
+insert into locations (level, path, country_code, location_code, timezone,
+                       latitude, longitude, centroid, status, display_order, country_id)
+select 'country',
+       lower(regexp_replace(ct.slug, '[^a-z0-9]+', '_', 'g'))::ltree,
+       c.iso2, c.iso2, c.timezone,
+       round(st_y(c.centroid::geometry)::numeric, 7),
+       round(st_x(c.centroid::geometry)::numeric, 7),
+       c.centroid, 'published', c.priority, c.id
+from countries c
+join country_translations ct on ct.country_id = c.id and ct.locale = 'en'
+where not exists (select 1 from locations l where l.country_id = c.id);
+
+insert into location_translations (location_id, locale, name, slug, h1, tagline, intro, meta_title, meta_description)
+select l.id, ct.locale, ct.name, ct.slug,
+       'Things to Do in ' || ct.name, ct.tagline, ct.intro, ct.meta_title, ct.meta_description
+from locations l
+join country_translations ct on ct.country_id = l.country_id
+where l.level = 'country'
+on conflict (location_id, locale) do nothing;
+
+-- 2. Regions
+insert into locations (parent_id, level, path, country_code, location_code, timezone,
+                       centroid, status, display_order, region_id)
+select p.id, 'region',
+       p.path || lower(regexp_replace(rt.slug, '[^a-z0-9]+', '_', 'g'))::ltree,
+       p.country_code, r.code, p.timezone, r.centroid, 'published', r.priority, r.id
+from regions r
+join region_translations rt on rt.region_id = r.id and rt.locale = 'en'
+join locations p on p.country_id = r.country_id and p.level = 'country'
+where not exists (select 1 from locations l where l.region_id = r.id);
+
+insert into location_translations (location_id, locale, name, slug, h1, tagline, meta_title, meta_description)
+select l.id, rt.locale, rt.name, rt.slug,
+       'Things to Do in ' || rt.name, rt.tagline, rt.meta_title, rt.meta_description
+from locations l
+join region_translations rt on rt.region_id = l.region_id
+where l.level = 'region'
+on conflict (location_id, locale) do nothing;
+
+-- 3. Qatar cities beyond Doha. Created BEFORE the hierarchy mapping below,
+--    or they are added after the step that would have picked them up — which
+--    is exactly the bug this comment exists to prevent recurring.
+insert into cities (country_id, region_id, centroid, timezone, population, is_featured, priority)
+select c.id,
+       (select r.id from regions r where r.country_id = c.id order by r.priority desc limit 1),
+       st_point(x.lng, x.lat)::geography, 'Asia/Qatar', x.pop, x.feat, x.prio
+from countries c
+join (values
+  (51.4900, 25.4300, 320000, true,  70),   -- Lusail
+  (51.6030, 25.1650, 100000, false, 55),   -- Al Wakrah
+  (51.4240, 25.2920, 610000, false, 60)    -- Al Rayyan
+) as x(lng, lat, pop, feat, prio) on true
+where c.iso2 = 'QA'
+  and not exists (
+    select 1 from cities ci
+    where ci.country_id = c.id
+      and st_x(ci.centroid::geometry) = x.lng and st_y(ci.centroid::geometry) = x.lat
+  );
+
+insert into city_translations (city_id, locale, name, slug, tagline, intro, best_time_to_visit, meta_title, meta_description)
+select ci.id, 'en', x.name, x.slug, x.tagline, x.intro, x.best_time, x.meta_title, x.meta_desc
+from cities ci
+join (values
+  (51.4900,'Lusail','lusail','The city Qatar built from nothing',
+   'A planned waterfront city north of Doha: the Lusail Stadium, a marina promenade and towers that were desert fifteen years ago.',
+   'November to March.',
+   'Things to Do in Lusail 2026 | Stadium, Marina & Boulevard',
+   'Visit Lusail Stadium, the marina promenade and Place Vendome. Twenty minutes from Doha by metro.'),
+  (51.6030,'Al Wakrah','al-wakrah','A fishing town that kept its souq',
+   'Old Doha without the crowds: a restored souq on the beach, dhow yards still in use, and seafood eaten where it lands.',
+   'November to March.',
+   'Things to Do in Al Wakrah 2026 | Souq, Beach & Heritage',
+   'Explore Al Wakrah souq, the beach and the heritage village south of Doha.'),
+  (51.4240,'Al Rayyan','al-rayyan','Qatar''s second city, and its desert edge',
+   'Where Doha thins into desert: Education City, the Al Rayyan stadium and the road west to the inland sea.',
+   'November to March.',
+   'Things to Do in Al Rayyan 2026 | Education City & Desert',
+   'Visit Education City, Al Rayyan stadium and the desert west of Doha.')
+) as x(lng, name, slug, tagline, intro, best_time, meta_title, meta_desc)
+  on st_x(ci.centroid::geometry) = x.lng
+on conflict do nothing;
+
+
+-- 4. Cities
+insert into locations (parent_id, level, path, country_code, timezone,
+                       latitude, longitude, centroid, hero_image_url,
+                       status, display_order, city_id)
+select p.id, 'city',
+       p.path || lower(regexp_replace(cit.slug, '[^a-z0-9]+', '_', 'g'))::ltree,
+       p.country_code, ci.timezone,
+       round(st_y(ci.centroid::geometry)::numeric, 7),
+       round(st_x(ci.centroid::geometry)::numeric, 7),
+       ci.centroid, ci.hero_image_url, 'published', ci.priority, ci.id
+from cities ci
+join city_translations cit on cit.city_id = ci.id and cit.locale = 'en'
+join locations p on p.region_id = ci.region_id and p.level = 'region'
+where not exists (select 1 from locations l where l.city_id = ci.id);
+
+insert into location_translations (location_id, locale, name, slug, h1, tagline, intro, body, meta_title, meta_description)
+select l.id, cit.locale, cit.name, cit.slug,
+       'Things to Do in ' || cit.name, cit.tagline, cit.intro, cit.body,
+       cit.meta_title, cit.meta_description
+from locations l
+join city_translations cit on cit.city_id = l.city_id
+where l.level = 'city'
+on conflict (location_id, locale) do nothing;
+
+-- 5. Districts, and one neighborhood, to prove depth beyond city level.
+--    These exist only in `locations` — there is no operational table below
+--    `areas`, and inventing one would be a table with no readers.
+insert into locations (parent_id, level, path, country_code, timezone,
+                       latitude, longitude, centroid, status, display_order, is_indexable)
+select p.id, x.level::location_level,
+       p.path || x.label::ltree,
+       p.country_code, p.timezone, x.lat, x.lng,
+       st_point(x.lng, x.lat)::geography, 'published', x.ord, true
+from locations p
+join location_translations pt on pt.location_id = p.id and pt.locale = 'en'
+join (values
+  ('dubai','district','downtown_dubai',       25.1972, 55.2744, 100),
+  ('dubai','district','dubai_marina',         25.0805, 55.1403,  95),
+  ('dubai','district','jumeirah',             25.2048, 55.2400,  90),
+  ('dubai','district','deira',                25.2700, 55.3095,  80),
+  ('dubai','district','palm_jumeirah',        25.1124, 55.1390,  85),
+  ('abu_dhabi','district','yas_island',       24.4991, 54.6070, 100),
+  ('abu_dhabi','district','saadiyat_island',  24.5390, 54.4370,  90),
+  ('abu_dhabi','district','abu_dhabi_corniche',24.4750, 54.3300,  80),
+  ('doha','district','west_bay',              25.3200, 51.5300, 100),
+  ('doha','district','the_pearl',             25.3690, 51.5510,  95),
+  ('doha','district','souq_waqif',            25.2870, 51.5330,  90),
+  ('sharjah','district','al_qasba',           25.3300, 55.3830,  80)
+) as x(parent_slug, level, label, lat, lng, ord) on x.parent_slug = lower(regexp_replace(pt.slug, '[^a-z0-9]+', '_', 'g'))
+-- Guard on the SLUG, not the path. The path label is derived from the slug by
+-- a trigger, so any label that differs from its slug gets rewritten on first
+-- insert and a path-based guard then stops matching — which silently inserts
+-- a duplicate on the next run.
+where not exists (
+  select 1 from location_translations lt
+  where lt.locale = 'en' and lt.slug = replace(x.label, '_', '-')
+);
+
+insert into location_translations (location_id, locale, name, slug, h1, tagline, intro, meta_title, meta_description)
+select l.id, 'en', x.name, x.slug, x.h1, x.tagline, x.intro, x.meta_title, x.meta_desc
+from locations l
+join (values
+  ('downtown_dubai','Downtown Dubai','downtown-dubai','Things to Do in Downtown Dubai',
+   'The Burj Khalifa, the fountain and the mall',
+   'Everything within a fifteen-minute walk: the world''s tallest building, the Dubai Fountain, and a mall large enough to need a map. Busiest between 18:00 and 21:00 when the fountain runs.',
+   'Things to Do in Downtown Dubai 2026 | Burj Khalifa & Fountain',
+   'Downtown Dubai guide: Burj Khalifa tickets, the Dubai Fountain show times and where to eat nearby.'),
+  ('dubai_marina','Dubai Marina','dubai-marina','Things to Do in Dubai Marina',
+   'Yachts, towers and a seven-kilometre walk',
+   'A man-made canal ringed by towers, with a promenade you can walk end to end in an hour. The departure point for most yacht charters and the closest beach to the metro.',
+   'Things to Do in Dubai Marina 2026 | Yachts, Beach & Dining',
+   'Dubai Marina guide: yacht charters, JBR beach, the Marina Walk and how to get there.'),
+  ('jumeirah','Jumeirah','jumeirah','Things to Do in Jumeirah',
+   'Beaches, the Burj Al Arab and low-rise calm',
+   'The old coastal strip: public beaches with the Burj Al Arab in the frame, the Jumeirah Mosque, and villas rather than towers.',
+   'Things to Do in Jumeirah 2026 | Beaches & Burj Al Arab',
+   'Jumeirah guide: Kite Beach, the Jumeirah Mosque tour and the Burj Al Arab.'),
+  ('deira','Deira','deira','Things to Do in Deira',
+   'The old city, and the gold souq',
+   'Where Dubai started. The gold and spice souqs, abra crossings over the creek for one dirham, and the best cheap food in the city.',
+   'Things to Do in Deira 2026 | Gold Souq & Dubai Creek',
+   'Deira guide: the Gold Souq, Spice Souq, abra rides across Dubai Creek.'),
+  ('palm_jumeirah','Palm Jumeirah','palm-jumeirah','Things to Do on Palm Jumeirah',
+   'The island shaped like a tree',
+   'Resorts along the fronds, Atlantis at the crown, and a monorail that is worth riding once for the view back at the skyline.',
+   'Things to Do on Palm Jumeirah 2026 | Atlantis & Beach Clubs',
+   'Palm Jumeirah guide: Atlantis, The View observation deck and beach clubs.'),
+  ('yas_island','Yas Island','yas-island','Things to Do on Yas Island',
+   'Four theme parks and a Formula 1 circuit',
+   'Ferrari World, Warner Bros, SeaWorld and Yas Waterworld within a shuttle ride of each other, plus the Yas Marina Circuit.',
+   'Things to Do on Yas Island 2026 | Ferrari World & Theme Parks',
+   'Yas Island guide: Ferrari World, Yas Waterworld, Warner Bros and the F1 circuit.'),
+  ('saadiyat_island','Saadiyat Island','saadiyat-island','Things to Do on Saadiyat Island',
+   'Museums and an undeveloped beach',
+   'The Louvre Abu Dhabi sits here, along with a protected beach where turtles nest — the quiet counterweight to Yas.',
+   'Things to Do on Saadiyat Island 2026 | Louvre Abu Dhabi',
+   'Saadiyat Island guide: Louvre Abu Dhabi tickets, Saadiyat beach and the cultural district.'),
+  ('abu_dhabi_corniche','Abu Dhabi Corniche','abu-dhabi-corniche','Things to Do on the Abu Dhabi Corniche',
+   'Eight kilometres of waterfront',
+   'A blue-flag beach, a cycle path the length of the bay, and the best view of the skyline at sunset.',
+   'Abu Dhabi Corniche 2026 | Beach, Cycling & Views',
+   'Abu Dhabi Corniche guide: the public beach, cycle hire and where to watch sunset.'),
+  ('west_bay','West Bay','west-bay','Things to Do in West Bay',
+   'Doha''s skyline, up close',
+   'The business district and the towers you see on every postcard, with the Corniche walk along its edge.',
+   'Things to Do in West Bay Doha 2026 | Skyline & Corniche',
+   'West Bay Doha guide: the Corniche, skyline views and dhow cruises.'),
+  ('the_pearl','The Pearl','the-pearl','Things to Do at The Pearl-Qatar',
+   'A marina built on reclaimed land',
+   'Porto Arabia''s marina, Mediterranean-style townhouses and a beach — the closest Doha gets to a resort district.',
+   'Things to Do at The Pearl-Qatar 2026 | Marina & Dining',
+   'The Pearl-Qatar guide: Porto Arabia marina, dining and the beach.'),
+  ('souq_waqif','Souq Waqif','souq-waqif','Things to Do at Souq Waqif',
+   'The market that is still a market',
+   'Restored rather than rebuilt: spice stalls, falcon souq, and courtyards that fill after dark rather than at midday.',
+   'Souq Waqif Doha 2026 | Markets, Falcons & Dining',
+   'Souq Waqif guide: the falcon souq, spice market, shisha courtyards and when to go.'),
+  ('al_qasba','Al Qasba','al-qasba','Things to Do at Al Qasba',
+   'Sharjah''s canal and the big wheel',
+   'A canal walk with the Eye of the Emirates wheel, theatres and restaurants — the evening counterpart to Sharjah''s museums.',
+   'Al Qasba Sharjah 2026 | Canal, Eye of the Emirates',
+   'Al Qasba guide: the Eye of the Emirates wheel, canal boats and dining.')
+) as x(label, name, slug, h1, tagline, intro, meta_title, meta_desc)
+  on subpath(l.path, -1)::text = x.label
+where l.level = 'district'
+on conflict (location_id, locale) do nothing;
+
+-- A neighborhood, to prove the sixth level works.
+insert into locations (parent_id, level, path, country_code, timezone, latitude, longitude,
+                       centroid, status, display_order)
+select p.id, 'neighborhood', p.path || 'jbr'::ltree, p.country_code, p.timezone,
+       25.0785, 55.1330, st_point(55.1330, 25.0785)::geography, 'published', 90
+from locations p
+where p.path = 'united_arab_emirates.dubai_emirate.dubai.dubai_marina'
+  and not exists (select 1 from locations l where l.path = p.path || 'jbr'::ltree);
+
+insert into location_translations (location_id, locale, name, slug, h1, tagline, intro)
+select l.id, 'en', 'JBR', 'jbr', 'Things to Do at JBR',
+       'The beach end of the Marina',
+       'Jumeirah Beach Residence: a public beach, an open-air mall along The Walk, and where most water sports in the Marina launch from.'
+from locations l where l.level = 'neighborhood' and subpath(l.path, -1)::text = 'jbr'
+on conflict (location_id, locale) do nothing;
+
+-- Counts drive the indexation gate, so they must be current after seeding.
+select refresh_location_counts();
+
 insert into site_settings (key, value, description) values
   ('brand', '{"name":"TravelHub Gulf","supportEmail":"help@travelhubgulf.com","whatsapp":"+971500000000"}', 'Global brand identity'),
   ('currencies', '{"default":"AED","enabled":["AED","SAR","QAR","OMR","BHD","KWD","USD","EUR","GBP","INR"]}', 'Currency switcher'),

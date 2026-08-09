@@ -106,6 +106,23 @@ async function buildEntries(kind: string, page: number): Promise<UrlEntry[] | nu
     return entries.slice(from, to + 1);
   }
 
+  if (kind === 'destinations') {
+    // should_index is computed in the database, so the sitemap and the page's
+    // own robots tag can never disagree — the classic way a sitemap ends up
+    // advertising noindex pages.
+    const { data } = await supabase
+      .from('location_pages')
+      .select('slug, locale, level, listing_count')
+      .eq('should_index', true)
+      .range(from, to);
+
+    return (data ?? []).map((row) => ({
+      loc: absolute(`${row.locale === DEFAULT_LOCALE ? '' : `/${row.locale}`}/destinations/${row.slug}`),
+      changefreq: row.level === 'country' ? 'weekly' : 'daily',
+      priority: row.level === 'city' ? 0.9 : row.level === 'country' ? 0.8 : 0.6,
+    }));
+  }
+
   if (kind === 'blog') {
     const { data } = await supabase
       .from('blog_post_translations')

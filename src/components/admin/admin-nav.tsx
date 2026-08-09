@@ -35,7 +35,7 @@ export function adminNav(prefix: string, counts: Record<string, number> = {}): A
       items: [
         { href: `${prefix}/admin/posts`, label: 'Posts', icon: FileText, built: true, count: counts.posts },
         { href: `${prefix}/admin/pages`, label: 'Custom pages', icon: Files, built: false },
-        { href: `${prefix}/admin/locations`, label: 'Locations', icon: MapPin, built: false },
+        { href: `${prefix}/admin/locations`, label: 'Locations', icon: MapPin, built: true, count: counts.locations },
         { href: `${prefix}/admin/services`, label: 'Services', icon: Wrench, built: false },
         { href: `${prefix}/admin/faqs`, label: 'FAQs', icon: HelpCircle, built: false },
       ],
