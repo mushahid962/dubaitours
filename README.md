@@ -32,6 +32,13 @@ cluster and exercised with the test scripts in `supabase/tests/` — including
 oversell attempts, replayed webhooks and two privilege-escalation attacks.
 Results are in [`docs/VERIFICATION.md`](docs/VERIFICATION.md).
 
+## Continuing this project in Claude Code
+
+`CLAUDE.md` in the root is loaded automatically by Claude Code at the start of
+every session — architecture, conventions, verification workflow and the
+mistakes already paid for. Setup steps in
+[`docs/MOVING-TO-CLAUDE-CODE.md`](docs/MOVING-TO-CLAUDE-CODE.md).
+
 ## Architecture
 
 The system is built on a three-layer spine — **business → listing → product**

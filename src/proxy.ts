@@ -3,7 +3,17 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { COUNTRY_LOCALE_HINT, DEFAULT_LOCALE, LOCALES, isLocale } from '@/lib/i18n/config';
 
 const PUBLIC_FILE = /\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|txt|xml|json|js|css|woff2?)$/;
-const DASHBOARD_PREFIXES = ['/dashboard', '/admin', '/account'];
+const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/account'];
+
+// Which roles may enter which area. Checked at the edge so a mis-routed link
+// fails in one hop instead of rendering a page that RLS will empty out.
+// This is routing, not security: RLS is the boundary, and removing this
+// would leak nothing.
+const AREA_ROLES: Array<{ prefix: string; roles: string[] }> = [
+  { prefix: '/admin', roles: ['content_manager', 'booking_manager', 'support_agent', 'admin', 'super_admin'] },
+  { prefix: '/dashboard', roles: ['business_owner', 'business_staff', 'tour_operator', 'hotel_manager',
+                                  'content_manager', 'booking_manager', 'support_agent', 'admin', 'super_admin'] },
+];
 
 /**
  * Next 16 renamed this file convention from `middleware` to `proxy`. Same
@@ -82,13 +92,45 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const strippedPath = hasLocalePrefix ? `/${segments.slice(1).join('/')}` : pathname;
-  const needsAuth = DASHBOARD_PREFIXES.some((prefix) => strippedPath.startsWith(prefix));
+  const needsAuth = PROTECTED_PREFIXES.some((prefix) => strippedPath.startsWith(prefix));
 
   if (needsAuth && !user) {
     const url = request.nextUrl.clone();
     url.pathname = hasLocalePrefix ? `/${locale}/sign-in` : '/sign-in';
     url.searchParams.set('next', pathname + search);
     return NextResponse.redirect(url);
+  }
+
+  if (needsAuth && user) {
+    const { data: profile } = await supabase
+      .from('profiles').select('role, status').eq('id', user.id).maybeSingle();
+
+    const row = profile as { role: string; status: string } | null;
+
+    // Status before role. A suspended admin is not an admin, and checking
+    // role first would let them through to a page that then has to undo it.
+    if (row?.status === 'suspended' || row?.status === 'banned') {
+      const url = request.nextUrl.clone();
+      url.pathname = hasLocalePrefix ? `/${locale}/account/suspended` : '/account/suspended';
+      url.search = '';
+      if (!strippedPath.startsWith('/account/suspended')) return NextResponse.redirect(url);
+    }
+
+    if (row?.status === 'pending_verification' && !strippedPath.startsWith('/verify-email')) {
+      const url = request.nextUrl.clone();
+      url.pathname = hasLocalePrefix ? `/${locale}/verify-email` : '/verify-email';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
+
+    const area = AREA_ROLES.find((rule) => strippedPath.startsWith(rule.prefix));
+    if (area && row && !area.roles.includes(row.role)) {
+      // Rewrite to 404 rather than redirect: a redirect to /404 confirms the
+      // admin area exists to whoever just probed for it.
+      const url = request.nextUrl.clone();
+      url.pathname = `/${locale}/404`;
+      return NextResponse.rewrite(url, { status: 404 });
+    }
   }
 
   // First-time visitors with no locale preference get a suggestion header,

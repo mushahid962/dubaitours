@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { getActor, can } from '@/lib/auth/session';
+import { getActor, canManageCompany } from '@/lib/auth/session';
 import { invalidateTags } from '@/lib/cache/redis';
 
 export type MediaState =
@@ -38,7 +38,7 @@ export async function uploadTourMediaAction(_prev: MediaState, formData: FormDat
   const files = formData.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
 
   if (!tourId || !companyId) return { status: 'error', message: 'Missing listing.' };
-  if (!can(actor, companyId, 'tours.write')) {
+  if (!canManageCompany(actor, companyId, 'listings.write.own')) {
     return { status: 'error', message: 'You cannot add photos to this operator’s listings.' };
   }
   if (!files.length) return { status: 'error', message: 'Choose at least one photo.' };

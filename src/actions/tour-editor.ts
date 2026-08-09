@@ -2,7 +2,7 @@
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
-import { getActor, can } from '@/lib/auth/session';
+import { getActor, canManageCompany } from '@/lib/auth/session';
 import { invalidateTags } from '@/lib/cache/redis';
 import {
   tourBasicsSchema, tourContentSchema, tourSeoSchema, tourFaqSchema,
@@ -45,7 +45,7 @@ export async function saveTourBasicsAction(_prev: EditorState, formData: FormDat
   if (!parsed.success) {
     return fail('Check the highlighted fields.', parsed.error.flatten().fieldErrors as Record<string, string[]>);
   }
-  if (!can(actor, parsed.data.companyId, 'tours.write')) {
+  if (!canManageCompany(actor, parsed.data.companyId, 'listings.write.own')) {
     return fail('You do not have permission to edit listings for this operator.');
   }
 
