@@ -92,6 +92,48 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
 
   const strippedPath = hasLocalePrefix ? `/${segments.slice(1).join('/')}` : pathname;
+
+  // SHORT-FORM DIRECTORY URLS
+  //
+  // /dubai/hotels was in the brief alongside /uae/dubai/hotels. Serving both
+  // would split every ranking signal between two URLs for one page. So the
+  // short form resolves here and 301s into the canonical, which means the
+  // convenient URL works and only one URL accumulates authority.
+  //
+  // City slugs are globally unique per locale (enforced by an index), so the
+  // lookup is unambiguous.
+  const dirSegments = strippedPath.split('/').filter(Boolean);
+  const COUNTRY_SLUGS = new Set([
+    'united-arab-emirates', 'uae', 'saudi-arabia', 'qatar', 'oman', 'bahrain', 'kuwait',
+  ]);
+  const RESERVED = new Set([
+    'destinations', 'search', 'admin', 'dashboard', 'account', 'sign-in', 'sign-up',
+    'setup', 'partner', 'callback', 'api', 'sitemaps', 'robots.txt', 'tour', 'operator',
+    'checkout', 'booking', 'guide', 'forgot-password', 'reset-password', 'verify-email',
+  ]);
+
+  if (
+    supabaseUrl && supabaseKey &&
+    dirSegments.length >= 2 &&
+    !COUNTRY_SLUGS.has(dirSegments[0]) &&
+    !RESERVED.has(dirSegments[0])
+  ) {
+    const { data: city } = await supabase
+      .from('city_translations')
+      .select('slug, city:cities!inner ( country:countries!inner ( translations:country_translations ( locale, slug ) ) )')
+      .eq('locale', locale)
+      .eq('slug', dirSegments[0])
+      .maybeSingle();
+
+    const countrySlug = (city as { city?: { country?: { translations?: Array<{ locale: string; slug: string }> } } } | null)
+      ?.city?.country?.translations?.find((t) => t.locale === locale)?.slug;
+
+    if (countrySlug) {
+      const url = request.nextUrl.clone();
+      url.pathname = `${hasLocalePrefix ? `/${locale}` : ''}/${countrySlug}/${dirSegments.join('/')}`;
+      return NextResponse.redirect(url, 301);
+    }
+  }
   const needsAuth = PROTECTED_PREFIXES.some((prefix) => strippedPath.startsWith(prefix));
 
   if (needsAuth && !user) {

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Search, ArrowRight, BadgeCheck, ShieldCheck, Headphones, Wallet, Star, Database } from 'lucide-react';
 import { getHomeData } from '@/services/homepage-repository';
+import { getCategoryTree, getTopCities } from '@/services/taxonomy-repository';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { routes } from '@/lib/seo/routes';
 import { graph, itemListSchema } from '@/lib/seo/json-ld';
@@ -33,8 +34,21 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   if (!isLocale(raw)) notFound();
   const locale = raw as Locale;
 
-  const data = await getHomeData(locale);
+  const [data, categories, cities] = await Promise.all([
+    getHomeData(locale),
+    getCategoryTree(locale),
+    getTopCities(locale),
+  ]);
   const prefix = locale === DEFAULT_LOCALE ? '' : `/${locale}`;
+
+  // Canonical directory URL. Declared once here so every link on the page
+  // agrees, and so the short /{city}/{category} form can 301 into it.
+  const dir = (citySlug: string, countrySlug: string, category?: string, sub?: string) =>
+    `${prefix}/${countrySlug}/${citySlug}${category ? `/${category}` : ''}${sub ? `/${sub}` : ''}`;
+
+  const featured = categories.filter((c) => c.isFeatured);
+  const rest = categories.filter((c) => !c.isFeatured);
+  const flagship = cities[0];
 
   return (
     <>
@@ -101,25 +115,65 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       </section>
 
       {/* ------------------------------------------------------------ categories */}
-      <Section id="categories" title="What are you in the mood for?" tone="band">
+      <Section id="categories" title="What are you looking for?"
+        subtitle="Every category, in every city we cover." tone="band">
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {data.categories.map((category) => (
-            <li key={category.slug}>
+          {featured.map((category) => (
+            <li key={category.id}>
               <Link
-                href={`${routes.search(locale)}?category=${category.slug}`}
-                className="dune-lift flex h-full flex-col justify-between gap-2 rounded-[var(--radius-lg)] bg-[var(--paper)] p-4"
-              >
+                href={flagship ? dir(flagship.slug, flagship.countrySlug, category.slug) : routes.search(locale)}
+                className="dune-lift flex h-full flex-col justify-between gap-2 rounded-[var(--radius-lg)] bg-[var(--paper)] p-4">
                 <span className="font-semibold">{category.name}</span>
-                {category.tourCount > 0 && (
-                  <span className="text-[var(--text-xs)] text-[var(--ink-faint)]">
-                    {category.tourCount} {category.tourCount === 1 ? 'experience' : 'experiences'}
-                  </span>
-                )}
+                <span className="text-[var(--text-xs)] text-[var(--ink-faint)]">
+                  {/* Only shown where there is inventory. "0 listings" reads
+                      as broken; silence reads as a category not yet filled. */}
+                  {category.listingCount > 0
+                    ? `${category.listingCount} in ${flagship?.name ?? 'the Gulf'}`
+                    : 'Browse'}
+                </span>
               </Link>
             </li>
           ))}
         </ul>
+
+        {rest.length > 0 && (
+          <ul className="flex flex-wrap gap-2 pt-1">
+            {rest.map((category) => (
+              <li key={category.id}>
+                <Link
+                  href={flagship ? dir(flagship.slug, flagship.countrySlug, category.slug) : routes.search(locale)}
+                  className="inline-block rounded-[var(--radius-pill)] border border-[var(--hairline)] bg-[var(--paper)] px-3.5 py-1.5 text-[var(--text-sm)] hover:border-[var(--teal)] hover:text-[var(--teal)]">
+                  {category.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
+
+      {/* --------------------------------------------------- popular activities */}
+      {featured.some((c) => (c.children?.length ?? 0) > 0) && flagship && (
+        <Section id="activities" title={`Popular in ${flagship.name}`}
+          subtitle="The specific things people actually search for — not just the category above them."
+          href={dir(flagship.slug, flagship.countrySlug, 'tours')} hrefLabel="All tours">
+          <ul className="flex flex-wrap gap-2">
+            {featured
+              .flatMap((category) => (category.children ?? []).map((sub) => ({ category, sub })))
+              .slice(0, 16)
+              .map(({ category, sub }) => (
+                <li key={sub.id}>
+                  <Link href={dir(flagship.slug, flagship.countrySlug, category.slug, sub.slug)}
+                    className="inline-flex items-center gap-2 rounded-[var(--radius-pill)] bg-[var(--paper)] px-4 py-2 text-[var(--text-sm)] shadow-[var(--shadow-card)] hover:text-[var(--teal)]">
+                    {sub.name}
+                    {sub.listingCount > 0 && (
+                      <span className="text-[var(--text-xs)] text-[var(--ink-faint)]">{sub.listingCount}</span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        </Section>
+      )}
 
       {/* -------------------------------------------------------------- trending */}
       {data.trending.length > 0 && (
@@ -144,33 +198,34 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       )}
 
       {/* ---------------------------------------------------------- destinations */}
-      <Section id="destinations" title="Where are you going?" subtitle="Six countries, and growing.">
+      <Section id="destinations" title="Where are you going?"
+        subtitle="Six countries. Every category available in every city."
+        href={`${prefix}/destinations`} hrefLabel="All destinations">
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {data.destinations.map((destination) => (
-            <li key={`${destination.countrySlug}-${destination.slug}`}>
-              <Link
-                href={routes.thingsToDo(locale, destination.countrySlug, destination.slug)}
-                className="dune-lift group relative flex h-56 flex-col justify-end overflow-hidden rounded-[var(--radius-lg)] bg-[var(--paper)] p-5"
-              >
-                {destination.heroImageUrl && (
+          {(cities.length ? cities : data.destinations.map((d) => ({
+            id: d.slug, name: d.name, slug: d.slug, countrySlug: d.countrySlug,
+            tagline: d.tagline, heroImageUrl: d.heroImageUrl, listingCount: d.tourCount,
+          }))).map((city) => (
+            <li key={city.id ?? city.slug}>
+              <Link href={dir(city.slug, city.countrySlug)}
+                className="dune-lift group relative flex h-56 flex-col justify-end overflow-hidden rounded-[var(--radius-lg)] bg-[var(--paper)] p-5">
+                {city.heroImageUrl && (
                   <>
-                    <Image
-                      src={destination.heroImageUrl} alt="" fill sizes="(max-width: 640px) 92vw, 23vw"
-                      className="object-cover transition-transform duration-[600ms] ease-[var(--ease-out)] group-hover:scale-105"
-                    />
+                    <Image src={city.heroImageUrl} alt="" fill sizes="(max-width: 640px) 92vw, 23vw"
+                      className="object-cover transition-transform duration-[600ms] ease-[var(--ease-out)] group-hover:scale-105" />
                     <span aria-hidden className="absolute inset-0 bg-gradient-to-t from-[rgb(11_31_28/0.82)] via-[rgb(11_31_28/0.2)] to-transparent" />
                   </>
                 )}
-                <span className={`relative flex flex-col gap-0.5 ${destination.heroImageUrl ? 'text-white' : ''}`}>
-                  <span className="text-[var(--text-xl)] font-semibold">{destination.name}</span>
-                  {destination.tagline && (
-                    <span className={`text-[var(--text-sm)] ${destination.heroImageUrl ? 'text-white/85' : 'text-[var(--ink-soft)]'}`}>
-                      {destination.tagline}
+                <span className={`relative flex flex-col gap-0.5 ${city.heroImageUrl ? 'text-white' : ''}`}>
+                  <span className="text-[var(--text-xl)] font-semibold">{city.name}</span>
+                  {city.tagline && (
+                    <span className={`text-[var(--text-sm)] ${city.heroImageUrl ? 'text-white/85' : 'text-[var(--ink-soft)]'}`}>
+                      {city.tagline}
                     </span>
                   )}
-                  {destination.tourCount > 0 && (
-                    <span className={`pt-1 text-[var(--text-xs)] ${destination.heroImageUrl ? 'text-white/70' : 'text-[var(--ink-faint)]'}`}>
-                      {destination.tourCount} experiences
+                  {city.listingCount > 0 && (
+                    <span className={`pt-1 text-[var(--text-xs)] ${city.heroImageUrl ? 'text-white/70' : 'text-[var(--ink-faint)]'}`}>
+                      {city.listingCount} listings
                     </span>
                   )}
                 </span>

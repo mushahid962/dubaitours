@@ -720,6 +720,193 @@ on conflict (location_id, locale) do nothing;
 -- Counts drive the indexation gate, so they must be current after seeding.
 select refresh_location_counts();
 
+-- ======================================================================
+-- BUSINESS CATEGORIES
+-- Thirteen top-level categories, each mapped to a fulfilment vertical, plus
+-- the subcategories that carry the real commercial intent — "dune buggy in
+-- Dubai" is a search; "tours in Dubai" mostly is not.
+-- ======================================================================
+insert into business_categories (code, vertical_id, kind, depth, display_order, is_featured, icon)
+select x.code, (select id from verticals where code = x.vertical), x.kind, 0, x.ord, x.feat, x.icon
+from (values
+  ('tours',                'tours',        'activity', 100, true,  'compass'),
+  ('hotels',               'hotels',       'place',     95, true,  'bed'),
+  ('attractions',          'attractions',  'place',     90, true,  'landmark'),
+  ('things-to-do',         'things-to-do', 'activity',  88, true,  'sparkles'),
+  ('malls',                'malls',        'place',     80, true,  'shopping-bag'),
+  ('restaurants',          'restaurants',  'place',     78, true,  'utensils'),
+  ('resorts',              'hotels',       'place',     75, false, 'palmtree'),
+  ('activity-providers',   'things-to-do', 'business',  70, false, 'bike'),
+  ('yacht-companies',      'tours',        'business',  68, true,  'sailboat'),
+  ('spas',                 'things-to-do', 'place',     60, false, 'flower'),
+  ('event-companies',      'things-to-do', 'business',  55, false, 'party-popper'),
+  ('car-rental',           'tours',        'business',  50, false, 'car'),
+  ('transportation',       'tours',        'business',  48, false, 'bus'),
+  ('travel-agencies',      'tours',        'business',  45, false, 'briefcase'),
+  ('tour-operators',       'tours',        'business',  44, false, 'map')
+) as x(code, vertical, kind, ord, feat, icon)
+where not exists (select 1 from business_categories b where b.code = x.code);
+
+insert into business_category_translations (category_id, locale, name, slug, plural, h1, intro, meta_title, meta_description)
+select b.id, 'en', x.name, x.slug, x.plural, x.h1, x.intro, x.meta_title, x.meta_desc
+from business_categories b
+join (values
+  ('tours','Tours','tours','tours','Tours in %s',
+   'Guided tours and day trips, bookable with instant confirmation and free cancellation.',
+   'Tours in %s 2026 | Book Online','Book tours in %s. Verified operators, instant confirmation, free cancellation.'),
+  ('hotels','Hotels','hotels','hotels','Hotels in %s',
+   'Where to stay, from beach resorts to city apartments.',
+   'Hotels in %s 2026 | Where to Stay','Compare hotels in %s by area, price and amenities.'),
+  ('attractions','Attractions','attractions','attractions','Attractions in %s',
+   'Landmarks, museums and the sights worth planning a day around.',
+   'Attractions in %s 2026 | Tickets & Opening Hours','Top attractions in %s with tickets, opening hours and how to get there.'),
+  ('things-to-do','Things to Do','things-to-do','experiences','Things to Do in %s',
+   'Everything worth doing, from desert safaris to water parks.',
+   'Things to Do in %s 2026 | Top Experiences','Find things to do in %s — tours, tickets and experiences with instant confirmation.'),
+  ('malls','Malls','malls','malls','Malls in %s',
+   'Shopping centres, outlets and souqs.',
+   'Malls in %s 2026 | Shopping Guide','Shopping malls and souqs in %s with opening hours and what is inside.'),
+  ('restaurants','Restaurants','restaurants','restaurants','Restaurants in %s',
+   'Where to eat, by cuisine and neighbourhood.',
+   'Restaurants in %s 2026 | Where to Eat','Restaurants in %s by cuisine, price and area.'),
+  ('resorts','Resorts','resorts','resorts','Resorts in %s',
+   'Beach and desert resorts for a longer stay.',
+   'Resorts in %s 2026 | Beach & Desert','Compare resorts in %s by beach access, spa and price.'),
+  ('activity-providers','Activity Providers','activity-providers','providers','Activity Providers in %s',
+   'The companies that actually run the experiences, with their licences on file.',
+   'Activity Providers in %s 2026','Licensed activity providers in %s with reviews and contact details.'),
+  ('yacht-companies','Yacht Charters','yacht-charters','yacht charters','Yacht Charters in %s',
+   'Private yachts and shared cruises, by the hour or the day.',
+   'Yacht Charters in %s 2026 | Private & Shared','Book yacht charters in %s. Private hire, shared cruises and sunset trips.'),
+  ('spas','Spas','spas','spas','Spas in %s',
+   'Hammams, hotel spas and day retreats.',
+   'Spas in %s 2026 | Hammam & Day Spa','Book spa treatments in %s, from traditional hammam to hotel day passes.'),
+  ('event-companies','Event Companies','event-companies','event companies','Event Companies in %s',
+   'Weddings, corporate events and private celebrations.',
+   'Event Companies in %s 2026','Event planners and production companies in %s.'),
+  ('car-rental','Car Rental','car-rental','car rental','Car Rental in %s',
+   'Self-drive hire, from economy to supercars.',
+   'Car Rental in %s 2026 | Compare Prices','Compare car rental in %s. Economy to luxury, with delivery options.'),
+  ('transportation','Airport Transfers','airport-transfers','transfers','Airport Transfers in %s',
+   'Private transfers, intercity rides and chauffeur services.',
+   'Airport Transfers in %s 2026 | Private Cars','Book airport transfers in %s. Fixed prices, flight tracking, meet and greet.'),
+  ('travel-agencies','Travel Agencies','travel-agencies','agencies','Travel Agencies in %s',
+   'Licensed agencies for packages, visas and multi-city itineraries.',
+   'Travel Agencies in %s 2026','Licensed travel agencies in %s for packages, visas and itineraries.'),
+  ('tour-operators','Tour Operators','tour-operators','operators','Tour Operators in %s',
+   'The licensed operators behind the tours, with reviews and fleet details.',
+   'Tour Operators in %s 2026 | Verified','Licensed tour operators in %s with verified licences and traveller reviews.')
+) as x(code, name, slug, plural, h1, intro, meta_title, meta_desc) on x.code = b.code
+on conflict (category_id, locale) do nothing;
+
+-- Subcategories. These carry the commercial intent: nobody searches "tours in
+-- Dubai" with a wallet open, but plenty search "dune buggy Dubai".
+insert into business_categories (parent_id, code, vertical_id, kind, depth, display_order, icon)
+select p.id, x.code, p.vertical_id, 'activity', 1, x.ord, x.icon
+from business_categories p
+join (values
+  ('tours','tours-dune-buggy',      100,'car-front'),
+  ('tours','tours-quad-bike',        95,'bike'),
+  ('tours','tours-desert-safari',    98,'sun'),
+  ('tours','tours-yacht-tours',      90,'sailboat'),
+  ('tours','tours-jet-ski',          85,'waves'),
+  ('tours','tours-city-tours',       80,'building-2'),
+  ('tours','tours-camel-rides',      75,'footprints'),
+  ('tours','tours-sandboarding',     70,'mountain'),
+  ('tours','tours-hot-air-balloon',  68,'wind'),
+  ('tours','tours-skydiving',        65,'parachute'),
+  ('tours','tours-dhow-cruise',      64,'ship'),
+  ('tours','tours-diving',           60,'anchor'),
+  ('things-to-do','ttd-water-parks', 90,'waves'),
+  ('things-to-do','ttd-theme-parks', 88,'ferris-wheel'),
+  ('things-to-do','ttd-observation', 80,'binoculars'),
+  ('things-to-do','ttd-museums',     70,'landmark'),
+  ('hotels','hotels-beach',          90,'umbrella'),
+  ('hotels','hotels-city',           85,'building'),
+  ('hotels','hotels-desert',         70,'tent'),
+  ('hotels','hotels-apartments',     60,'home')
+) as x(parent_code, code, ord, icon) on x.parent_code = p.code
+where p.parent_id is null
+  and not exists (select 1 from business_categories b where b.code = x.code);
+
+insert into business_category_translations (category_id, locale, name, slug, h1, intro, meta_title, meta_description)
+select b.id, 'en', x.name, x.slug, x.h1, x.intro, x.meta_title, x.meta_desc
+from business_categories b
+join (values
+  ('tours-dune-buggy','Dune Buggy','dune-buggy','Dune Buggy Tours in %s',
+   'Self-drive buggies across open desert, from one-hour taster runs to half-day expeditions.',
+   'Dune Buggy Tours in %s 2026 | Book Online','Book dune buggy tours in %s. Self-drive Can-Am and Polaris buggies with guides and safety gear.'),
+  ('tours-quad-bike','Quad Bike','quad-bike','Quad Bike Tours in %s',
+   'Quad bikes on marked desert trails, suitable for first-timers.',
+   'Quad Bike Tours in %s 2026 | Desert ATV','Book quad bike tours in %s. Guided ATV rides with helmets and briefing included.'),
+  ('tours-desert-safari','Desert Safari','desert-safari','Desert Safari in %s',
+   'Dune bashing, camel rides and camp dinners under the stars.',
+   'Desert Safari in %s 2026 | Book from AED 99','Book desert safaris in %s with dune bashing, BBQ dinner and live shows.'),
+  ('tours-yacht-tours','Yacht Tours','yacht-tours','Yacht Tours in %s',
+   'Private charters and shared cruises along the coast.',
+   'Yacht Tours in %s 2026 | Private Charters','Book yacht tours in %s. Private hire by the hour, shared sunset cruises.'),
+  ('tours-jet-ski','Jet Ski','jet-ski','Jet Ski in %s',
+   'Guided jet ski rides past the skyline, 30 minutes to two hours.',
+   'Jet Ski in %s 2026 | Guided Rides','Book jet ski rides in %s. Guided routes past the landmarks, all levels.'),
+  ('tours-city-tours','City Tours','city-tours','City Tours in %s',
+   'Half-day and full-day guided tours of the landmarks.',
+   'City Tours in %s 2026 | Guided Sightseeing','Book city tours in %s. Half-day and full-day sightseeing with licensed guides.'),
+  ('tours-camel-rides','Camel Rides','camel-rides','Camel Rides in %s',
+   'Short desert rides and longer caravan treks.',
+   'Camel Rides in %s 2026 | Desert Treks','Book camel rides in %s, from short desert loops to sunrise caravans.'),
+  ('tours-sandboarding','Sandboarding','sandboarding','Sandboarding in %s',
+   'Boards and instruction on the big dunes.',
+   'Sandboarding in %s 2026 | Desert Dunes','Book sandboarding in %s. Boards, instruction and transfers included.'),
+  ('tours-hot-air-balloon','Hot Air Balloon','hot-air-balloon','Hot Air Balloon Rides in %s',
+   'Sunrise flights over the desert, with breakfast on landing.',
+   'Hot Air Balloon Rides in %s 2026','Book hot air balloon flights in %s. Sunrise departures with breakfast.'),
+  ('tours-skydiving','Skydiving','skydiving','Skydiving in %s',
+   'Tandem jumps over the coastline.',
+   'Skydiving in %s 2026 | Tandem Jumps','Book tandem skydiving in %s with video packages.'),
+  ('tours-dhow-cruise','Dhow Cruise','dhow-cruise','Dhow Cruises in %s',
+   'Traditional wooden boats with dinner and entertainment.',
+   'Dhow Cruise in %s 2026 | Dinner Cruises','Book dhow cruises in %s with dinner buffet and live entertainment.'),
+  ('tours-diving','Diving & Snorkelling','diving','Diving in %s',
+   'Reef dives, wrecks and try-dives for beginners.',
+   'Diving in %s 2026 | PADI Courses & Reef Dives','Book diving and snorkelling in %s. PADI courses, reef and wreck dives.'),
+  ('ttd-water-parks','Water Parks','water-parks','Water Parks in %s',
+   'Slides, wave pools and lazy rivers.',
+   'Water Parks in %s 2026 | Tickets','Book water park tickets in %s. Skip-the-line entry and combo passes.'),
+  ('ttd-theme-parks','Theme Parks','theme-parks','Theme Parks in %s',
+   'Rollercoasters, character parks and indoor attractions.',
+   'Theme Parks in %s 2026 | Tickets & Passes','Book theme park tickets in %s. Single-park and multi-park passes.'),
+  ('ttd-observation','Observation Decks','observation-decks','Observation Decks in %s',
+   'The high viewpoints, and when to book them.',
+   'Observation Decks in %s 2026 | Skyline Views','Book observation deck tickets in %s. Sunset slots sell out first.'),
+  ('ttd-museums','Museums','museums','Museums in %s',
+   'Art, heritage and science museums.',
+   'Museums in %s 2026 | Tickets & Hours','Museums in %s with tickets, opening hours and what to see.'),
+  ('hotels-beach','Beach Hotels','beach-hotels','Beach Hotels in %s',
+   'Hotels with direct beach access.',
+   'Beach Hotels in %s 2026','Beach hotels in %s with private beach access and sea views.'),
+  ('hotels-city','City Hotels','city-hotels','City Hotels in %s',
+   'Central hotels near the landmarks and metro.',
+   'City Hotels in %s 2026','City-centre hotels in %s near the metro and main attractions.'),
+  ('hotels-desert','Desert Camps','desert-camps','Desert Camps in %s',
+   'Overnight camps and desert resorts.',
+   'Desert Camps in %s 2026 | Overnight Stays','Book overnight desert camps in %s with dinner and stargazing.'),
+  ('hotels-apartments','Apartments','apartments','Serviced Apartments in %s',
+   'Self-catering stays for longer trips.',
+   'Serviced Apartments in %s 2026','Serviced apartments in %s for longer stays, with kitchens and weekly rates.')
+) as x(code, name, slug, h1, intro, meta_title, meta_desc) on x.code = b.code
+on conflict (category_id, locale) do nothing;
+
+-- Attach the seeded listings so the counts are not all zero.
+insert into listing_categories (listing_id, category_id, is_primary)
+select l.id, bc.id, true
+from listings l
+join verticals v on v.id = l.vertical_id
+join business_categories bc on bc.code = v.code and bc.parent_id is null
+where not exists (select 1 from listing_categories x where x.listing_id = l.id)
+on conflict do nothing;
+
+select refresh_city_category_counts();
+
 insert into site_settings (key, value, description) values
   ('brand', '{"name":"TravelHub Gulf","supportEmail":"help@travelhubgulf.com","whatsapp":"+971500000000"}', 'Global brand identity'),
   ('currencies', '{"default":"AED","enabled":["AED","SAR","QAR","OMR","BHD","KWD","USD","EUR","GBP","INR"]}', 'Currency switcher'),

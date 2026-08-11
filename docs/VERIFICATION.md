@@ -178,6 +178,26 @@ Two process lessons, both now in CLAUDE.md:
   evidence. My handler asserted "migration 0023 adds the missing policy" while
   the real error said something else entirely, and it cost an hour.
 
+## Business categories (0024)
+
+| Check | Result |
+|---|---|
+| 24 migrations apply clean | yes |
+| Seed run twice | idempotent |
+| Top-level categories | 15 |
+| Subcategories | 20 (12 under Tours) |
+| `resolve_directory_path` on a full path | Dubai / Tours / Dune Buggy |
+| City × category counts | Hotels 3, Attractions 2, Malls 2, Tours 1 |
+| Parent counts roll up from children | yes |
+| Catch-up file on a 0023 database | applies in one transaction |
+
+Route consolidation: `/[country]/[city]/d/[vertical]` and the separate
+`things-to-do` page were **deleted**. One route now serves every category and
+subcategory, and `/dubai/hotels` 301s to `/uae/dubai/hotels` at the edge.
+
+One schema fix along the way: a partial unique index cannot contain a
+subquery, so top-level slug uniqueness is enforced by a trigger instead.
+
 ## Not yet verified
 
 The TypeScript layer has not been type-checked or run — it depends on

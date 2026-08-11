@@ -1,4 +1,70 @@
-# SEO & answer-engine playbook
+# SEO playbook
+
+## The canonical URL, decided once
+
+```
+/{country}/{city}/{category}/{subcategory?}/{slug?}
+```
+
+`/uae/dubai/tours/dune-buggy/can-am-maverick-1-hour`
+
+**The short form `/dubai/hotels` 301s into it.** Both were requested. Serving
+both without a redirect splits every ranking signal between two URLs for one
+page — the most common self-inflicted SEO wound there is. The country prefix
+wins because it scales to six countries without slug collisions (Al Khor
+exists in Qatar *and* Saudi Arabia) and reads as a hierarchy to crawlers and
+to people.
+
+The redirect happens at the edge in `proxy.ts`. City slugs are globally unique
+per locale, enforced by an index, so the lookup is unambiguous.
+
+| Path | Purpose |
+|---|---|
+| `/{country}` | Country hub |
+| `/{country}/{city}` | City hub, every category |
+| `/{country}/{city}/{category}` | Hotels in Dubai |
+| `/{country}/{city}/{category}/{sub}` | Dune buggy in Dubai |
+| `/{country}/{city}/{category}/{sub}/{slug}` | One listing |
+| `/destinations/{slug}` | Location *guide* — editorial, not inventory |
+| `/{city}/{category}` | 301 → canonical |
+
+`/destinations` is the browse tree and the editorial layer. The country/city
+paths are the commercial layer. They are different pages with different jobs,
+and neither canonicalises to the other.
+
+## Categories
+
+Two levels, and the second is where the money is. Nobody searches "tours in
+Dubai" with a wallet open; plenty search "dune buggy Dubai". Fifteen top-level
+categories, twenty subcategories seeded.
+
+Top-level slugs are globally unique (enforced by trigger, since `/{city}/{slug}`
+has no parent segment to disambiguate them). Child slugs are unique per parent,
+so `/dubai/tours/yacht-tours` and `/dubai/cruises/yacht-charter` can coexist.
+
+## What gets indexed
+
+Only the **unfiltered first page** of any category. Filter combinations are
+`noindex, follow` — combinatorially there are thousands, and indexing them
+buries the pages with real demand.
+
+Location pages carry their own gate (three listings, or 250+ characters of
+original intro, or a hub with published children). See `VERIFICATION.md`.
+
+## Internal linking
+
+Every category page carries the full category rail for its city, so all ~35
+category and subcategory pages in a city link to each other. That is what gets
+a long tail discovered without a single manual link.
+
+Subcategory chips sit above the results on parent pages — the fastest route
+from a broad category to the specific search that converts.
+
+## Structured data
+
+`BreadcrumbList` and `FAQPage` on every category page, `ItemList` for the
+results. FAQs are generated from real numbers — price floor and live count —
+so they are never stale or invented.
 
 ## 1. The position we're competing for
 

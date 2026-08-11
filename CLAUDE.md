@@ -53,6 +53,19 @@ transition to `published`.
 **Admins cannot create admins.** Only `super_admin` may call `assign_role`,
 and the last active super admin cannot be demoted.
 
+## URL canon — do not add a fourth pattern
+
+```
+/{country}/{city}/{category}/{subcategory?}/{slug?}   ← commercial, canonical
+/destinations/{slug}                                  ← editorial location guides
+/{city}/{category}                                    ← 301 into the canonical
+```
+
+Three competing patterns existed before this was settled (`[category]`,
+`d/[vertical]`, and `destinations`). Two were deleted. If a new page needs a
+directory URL, it goes under the canonical or it gets a redirect — never a
+second live path to the same content.
+
 ## Conventions
 
 - **Migrations define schema. The seed defines data.** A backfill inside a
