@@ -51,11 +51,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
     default: 'TravelHub Gulf — tours, tickets and experiences across the GCC',
-    template: '%s | TravelHub Gulf',
+    template: '%s | TourLeads',
   },
   description:
     'Book tours, attraction tickets and desert experiences across the UAE, Saudi Arabia, Qatar, Oman, Bahrain and Kuwait. Verified operators, instant confirmation, free cancellation.',
-  applicationName: 'TravelHub Gulf',
+  applicationName: 'TourLeads',
   formatDetection: { telephone: false },
 };
 

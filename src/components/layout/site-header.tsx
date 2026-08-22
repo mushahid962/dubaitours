@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Search, Globe, User, Menu } from 'lucide-react';
+import { Globe, User } from 'lucide-react';
 import { getActor } from '@/lib/auth/session';
 import { routes } from '@/lib/seo/routes';
 import { LOCALES, LOCALE_META, DEFAULT_LOCALE, type Locale } from '@/lib/i18n/config';
@@ -16,32 +16,33 @@ import { signOutAction } from '@/actions/auth';
 export async function SiteHeader({ locale, path }: { locale: Locale; path: string }) {
   const actor = await getActor();
   const prefix = locale === DEFAULT_LOCALE ? '' : `/${locale}`;
+  const home = routes.home(locale);
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--hairline)] bg-[color-mix(in_oklab,var(--salt)_88%,transparent)] backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
         <Link href={routes.home(locale)} className="flex items-center gap-2 font-[family-name:var(--font-display)] text-[var(--text-xl)] font-bold">
           <span aria-hidden className="grid h-8 w-8 place-items-center rounded-[var(--radius-md)] bg-[var(--teal)] text-[var(--text-sm)] text-white">
-            TG
+            TL
           </span>
-          <span className="hidden sm:inline">TravelHub<span className="text-[var(--teal)]"> Gulf</span></span>
+          <span className="hidden sm:inline">Tour<span className="text-[var(--teal)]">Leads</span></span>
         </Link>
 
-        <form action={routes.search(locale)} className="relative ms-auto hidden max-w-xs flex-1 md:block">
-          <label htmlFor="header-q" className="sr-only">Search experiences</label>
-          <Search className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 text-[var(--ink-faint)]" aria-hidden />
-          <input
-            id="header-q" name="q" type="search" placeholder="Search experiences"
-            className="h-10 w-full rounded-[var(--radius-pill)] border border-[var(--hairline)] bg-[var(--paper)] ps-9 pe-3 text-[var(--text-sm)]"
-          />
-        </form>
-
-        <nav className="ms-auto flex items-center gap-1 md:ms-0" aria-label="Main">
+        <nav className="ms-auto flex items-center gap-1" aria-label="Main">
+          <Link href={`${home}#how-it-works`} className="hidden rounded-[var(--radius-pill)] px-3 py-2 text-[var(--text-sm)] font-medium hover:bg-[var(--limestone)] lg:inline-block">
+            How it works
+          </Link>
           <Link
-            href={`${prefix}/partner/apply`}
+            href={`${home}#lead-types`}
             className="hidden rounded-[var(--radius-pill)] px-3 py-2 text-[var(--text-sm)] font-medium hover:bg-[var(--limestone)] lg:inline-block"
           >
-            List your business
+            Lead types
+          </Link>
+          <Link
+            href={`${home}#pricing`}
+            className="hidden rounded-[var(--radius-pill)] px-3 py-2 text-[var(--text-sm)] font-medium hover:bg-[var(--limestone)] lg:inline-block"
+          >
+            Pricing
           </Link>
 
           <details className="relative">
@@ -99,11 +100,14 @@ export async function SiteHeader({ locale, path }: { locale: Locale; path: strin
           ) : (
             <Link
               href={`${prefix}/sign-in`}
-              className="rounded-[var(--radius-pill)] bg-[var(--ink)] px-4 py-2 text-[var(--text-sm)] font-semibold text-[var(--salt)]"
+              className="hidden rounded-[var(--radius-pill)] px-3 py-2 text-[var(--text-sm)] font-semibold hover:bg-[var(--limestone)] sm:inline-block"
             >
-              Sign in
+              Operator login
             </Link>
           )}
+          <Link href={`${home}#lead-form`} className="rounded-[var(--radius-pill)] bg-[var(--teal)] px-4 py-2 text-[var(--text-sm)] font-semibold text-white transition-colors hover:bg-[var(--teal-deep)]">
+            Get leads
+          </Link>
         </nav>
       </div>
     </header>
